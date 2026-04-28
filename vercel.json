@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/google-drive/:path*",
+      "destination": "https://lh3.googleusercontent.com/:path*"
+    },
+    {
+      "source": "/gdrive-uc/:path*",
+      "destination": "https://drive.google.com/:path*"
+    }
+  ]
+}
