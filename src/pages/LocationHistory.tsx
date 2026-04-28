@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import AddLocationModal from '../components/AddLocationModal';
-import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 
 interface LocationRecord {
@@ -77,137 +76,133 @@ const LocationHistory: React.FC = () => {
     setPdfModal(true);
   };
 
-  // PDF GENERATION — vertical stack of bordered labels (matches reference layout)
+  // PDF GENERATION — HTML print window (50×38mm sticker, mirrors BulkQRModal reference)
   const generatePDF = async () => {
     if (!selectedLocation || isPdfGenerating) return;
     setIsPdfGenerating(true);
 
     try {
-      const base64 = await generateQRLabelBase64(selectedLocation);
+      // Generate QR as high-res data URL (no network, pure client-side)
+      const qrDataUrl = await QRCode.toDataURL(selectedLocation, {
+        margin: 1,
+        width: 400,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
 
-      const doc = new jsPDF('p', 'mm', 'a4');
-      const pageW = 210, pageH = 297;
-      const margin = 12;
-      const cols = 2;
-      const gapX = 5, gapY = 5;
-      const labelW = (pageW - 2 * margin - (cols - 1) * gapX) / cols; // ~91.5mm each
-      const labelH = labelW * (200 / 460);                             // ~39.8mm
-
-      let col = 0, row = 0;
-      for (let i = 0; i < printCount; i++) {
-        // New row starting — check if we need a new page
-        if (col === 0 && i > 0) {
-          const nextY = margin + row * (labelH + gapY);
-          if (nextY + labelH > pageH - margin) {
-            doc.addPage();
-            row = 0;
-          }
-        }
-        const x = margin + col * (labelW + gapX);
-        const y = margin + row * (labelH + gapY);
-        doc.addImage(base64, 'PNG', x, y, labelW, labelH);
-        col++;
-        if (col >= cols) { col = 0; row++; }
+      const win = window.open('', '', 'width=900,height=700');
+      if (!win) {
+        alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
+        return;
       }
 
-      doc.save(`QR_${selectedLocation.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+      win.document.write(buildPrintHTML(selectedLocation, qrDataUrl, printCount));
+      win.document.close();
       setPdfModal(false);
     } catch (err) {
       console.error(err);
-      alert('Failed to generate PDF. Please try again.');
+      alert('Failed to generate QR. Please try again.');
     } finally {
       setIsPdfGenerating(false);
     }
   };
 
-  // Generates a bordered label canvas — QR left, bold location text right
-  // Canvas: 460×200 → maps to ~91.5×39.8mm in PDF (2-up layout)
-  const generateQRLabelBase64 = async (locationText: string): Promise<string> => {
-    const CW = 460, CH = 200;
-    const QR_ZONE = 200;              // QR occupies left 200px (square)
-    const QR_SIZE = 178;
-    const QR_PAD = (CH - QR_SIZE) / 2;
-    const TEXT_X = QR_ZONE + 16;
-    const TEXT_MAX_W = CW - TEXT_X - 10;
+  // Builds a self-printing HTML document with one 50×38mm sticker per copy
+  const buildPrintHTML = (locationText: string, qrDataUrl: string, count: number): string => {
+    const labels = Array.from({ length: count })
+      .map(() => `
+        <div class="page">
+          <img class="qr" src="${qrDataUrl}" alt="QR" />
+          <div class="label">${locationText}</div>
+        </div>
+      `).join('');
 
-    const canvas = document.createElement('canvas');
-    canvas.width = CW;
-    canvas.height = CH;
-    const ctx = canvas.getContext('2d')!;
-
-    // White background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, CW, CH);
-
-    // Outer border
-    ctx.strokeStyle = '#b0b0b0';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(1.5, 1.5, CW - 3, CH - 3);
-
-    // Vertical divider between QR and text
-    ctx.beginPath();
-    ctx.moveTo(QR_ZONE, 10);
-    ctx.lineTo(QR_ZONE, CH - 10);
-    ctx.strokeStyle = '#dedede';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Generate QR code
-    const qrDataUrl = await QRCode.toDataURL(locationText, {
-      margin: 1,
-      width: QR_SIZE,
-      color: { dark: '#000000', light: '#ffffff' },
-    });
-
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        // Draw QR centered in left zone
-        ctx.drawImage(img, QR_PAD, QR_PAD, QR_SIZE, QR_SIZE);
-
-        // Location text — bold, word-wrapped, vertically centered
-        ctx.fillStyle = '#111111';
-        ctx.textBaseline = 'top';
-
-        // Word-wrap
-        const wrapText = (text: string, maxW: number, fontSize: number) => {
-          ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-          const words = text.split(/\s+/);
-          const lines: string[] = [];
-          let line = '';
-          for (const w of words) {
-            const test = line ? `${line} ${w}` : w;
-            if (ctx.measureText(test).width > maxW && line) {
-              lines.push(line);
-              line = w;
-            } else {
-              line = test;
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>QR Labels — ${locationText}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
+        <style>
+          @page {
+            size: 50mm 38mm;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white;
+            font-family: 'Inter', Arial, sans-serif;
+            width: 100%;
+            height: 100%;
+          }
+          .page {
+            background: white;
+            width: 100%;
+            height: 38mm;
+            padding: 3mm;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            page-break-after: always;
+            overflow: hidden;
+            gap: 2mm;
+          }
+          img.qr {
+            width: 28mm;
+            height: 28mm;
+            display: block;
+            object-fit: contain;
+            flex-shrink: 0;
+          }
+          .label {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 900;
+            line-height: 1.3;
+            word-break: break-word;
+            text-align: center;
+            color: #111;
+            height: 100%;
+          }
+          @media print {
+            html, body {
+              width: 50mm !important;
+              height: 38mm !important;
+              background: white !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .page {
+              margin: 0 !important;
+              padding: 2mm !important;
+              box-shadow: none;
+              border: none;
+              width: 100% !important;
+              height: 38mm !important;
             }
           }
-          if (line) lines.push(line);
-          return lines;
-        };
-
-        // Try font size 38, fall back to 30 if too many lines
-        let fontSize = 38;
-        let lines = wrapText(locationText, TEXT_MAX_W, fontSize);
-        if (lines.length > 3) {
-          fontSize = 30;
-          lines = wrapText(locationText, TEXT_MAX_W, fontSize);
-        }
-
-        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-        const lineH = fontSize + 8;
-        const totalH = lines.length * lineH;
-        const startY = (CH - totalH) / 2;
-
-        lines.forEach((l, i) => ctx.fillText(l, TEXT_X, startY + i * lineH));
-
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.onerror = reject;
-      img.src = qrDataUrl;
-    });
+        </style>
+      </head>
+      <body>
+        ${labels}
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              window.close();
+            }, 800);
+          };
+        <\/script>
+      </body>
+      </html>
+    `;
   };
 
 
