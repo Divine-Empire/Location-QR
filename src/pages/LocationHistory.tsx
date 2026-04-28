@@ -220,14 +220,14 @@ const LocationHistory: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <input
               type="text"
-              placeholder="Search by location name..."
+              placeholder="Search by location..."
               className="input-field"
-              style={{ maxWidth: '260px', margin: 0 }}
+              style={{ maxWidth: '190px', margin: 0 }}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             <button className="btn-add" onClick={() => setIsModalOpen(true)}>
-              + Add-Location
+              Add-Location
             </button>
           </div>
         </div>
