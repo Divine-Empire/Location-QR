@@ -142,7 +142,7 @@ const LocationHistory: React.FC = () => {
             background: white;
             width: 100%;
             height: 38mm;
-            padding: 3mm;
+            padding: 3mm 1mm 3mm 6mm;
             display: flex;
             flex-direction: row;
             align-items: center;
@@ -181,7 +181,7 @@ const LocationHistory: React.FC = () => {
             }
             .page {
               margin: 0 !important;
-              padding: 2mm !important;
+              padding: 2mm 1mm 2mm 6mm !important;
               box-shadow: none;
               border: none;
               width: 100% !important;
